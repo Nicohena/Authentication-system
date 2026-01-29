@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, register, logout, sendVerifyOtp, verifyEmail } from '../controllers/authcontroller.js';
+import { login, register, logout, sendVerifyOtp, verifyEmail, isAuthenticated } from '../controllers/authcontroller.js';
 import userauth from '../middleware/userauth.js';
 
 const authRouter = express.Router();
@@ -12,5 +12,6 @@ authRouter.post('/logout', logout);
 // Protected routes (require auth)
 authRouter.post('/send-verify-otp', userauth, sendVerifyOtp);
 authRouter.post('/verify-account', userauth, verifyEmail);
+authRouter.post('/is-auth', userauth, isAuthenticated);
 
 export default authRouter;
