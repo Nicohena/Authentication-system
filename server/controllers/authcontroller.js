@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/usermodel.js';
 import transporter from '../config/nodemailer.js';
+import { EMAIL_VERIFY_TEMPLATE, PASSWORD_RESET_TEMPLATE } from '../config/emailTemplate.js';
 
 // REGISTER
 export const register = async (req, res) => {
@@ -92,7 +93,9 @@ export const sendVerifyOtp = async (req, res) => {
             from: process.env.SENDER_EMAIL,
             to: user.email,
             subject: 'Account Verification OTP',
-            text: `Your OTP is: ${otp}`
+            // text: `Your OTP is: ${otp}`,
+            html: EMAIL_VERIFY_TEMPLATE.replace("{{otp}}", otp).replace("{{email}}", user.email)
+
         });
 
         return res.status(200).json({ success: true, message: "OTP sent successfully" });
@@ -126,13 +129,22 @@ export const verifyEmail = async (req, res) => {
 };
 
 // CHECK AUTH
+
 export const isAuthenticated = async (req, res) => {
-    try {
-        return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
+  try {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await userModel.findById(decoded.userId).select('-password');
+    if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    return res.status(200).json({ success: true, user });
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
 };
+
 
 // SEND RESET PASSWORD OTP
 export const sendResetotp = async (req, res) => {
@@ -152,10 +164,29 @@ export const sendResetotp = async (req, res) => {
             from: process.env.SENDER_EMAIL,
             to: user.email,
             subject: 'Password Reset OTP',
-            text: `Your OTP is: ${otp}`
+            // text: `Your OTP is: ${otp}`,
+            html:PASSWORD_RESET_TEMPLATE.replace("{{otp}}", otp).replace("{{email}}", user.email)
         });
 
         return res.json({ success: true, message: "Password reset OTP sent" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// VERIFY RESET OTP
+export const verifyResetOtp = async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ success: false, message: "Email and OTP are required" });
+
+    try {
+        const user = await userModel.findOne({ email });
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        if (user.resetotp !== otp) return res.status(400).json({ success: false, message: "Invalid OTP" });
+        if (user.resetotpexpireat < Date.now()) return res.status(400).json({ success: false, message: "OTP expired" });
+
+        return res.json({ success: true, message: "OTP verified successfully" });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
